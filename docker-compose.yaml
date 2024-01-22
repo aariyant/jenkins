@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  jenkins-master:
+    image: satellite/jenkins-master
+    build:
+      dockerfile: jenkins-master/Dockerfile
+    privileged: true
+    user: root
+    ports:
+      - 8080:8080
+      - 50000:50000
+    container_name: jenkins-master
+    volumes:
+      - ./jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/docker.sock
+      - ./ssh:/root/.ssh
+    networks:
+      - jenkins
+
+  agent:
+    image: satellite/jenkins-agent
+    privileged: true
+    build:
+      dockerfile: jenkins-agent/Dockerfile
+    container_name: jenkins-agent
+    networks:
+      - jenkins
+    expose:
+      - 22
+    volumes:
+      - ./ssh:/root/.ssh
+      - /var/run/docker.sock:/var/docker.sock
+    environment:
+      - JENKINS_AGENT_SSH_PUBKEY=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDffGE1BFHhkL7TrdxRTG1gLw/U/xpmwRcS+DbZnRGEMCiW2XEUrL6OmEyHg2mMyyRLuyz6jw4TJOJRtzeYZdxcOx85pQL6l0AQF2xm5b5ADmyyxiIxazklTXnSiaE7GaHETLyXtu80bpD1okGVHtV9HAsszWgz5/ZErakL27hU+FuMP68PMi7Pug0SNy6wUACS/zRksX1/p0bsF5IKdyhk5lJVx4g0CywTMUps5WZ0KS29Ps85HYWkW+DJ1DyDs+rh87VV1rNH69LBRCxNFG1HTY+Z5qaEdRc1CaIfI04+Est2ynJoZmaTlIXXHXVORoVHPLQKSfjf7twQMj3PTB8wSpuLGKzmuDMTZwmu8R7g7V7NaOo5InRKPbIBHDVvLzUGJJl0rYKOA8MX0INcaJz5c/QzoiXHiAb+xlbi5oPOv2fTLZTauYSf6wfD3NGauIU12HOikZGA75o3MvhMJHJUiV1tVuMLsMdrq6wCdFKGt9bV08+RwoP48HnedTPUc9c= jenkins
+
+networks:
+  jenkins:
+    driver: bridge     
