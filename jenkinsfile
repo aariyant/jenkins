@@ -1,0 +1,90 @@
+pipeline{
+    agent {
+        node { label "jenkins-agent"}
+    }
+    stages{
+        stage("Checkout Code"){
+            steps{
+                script{
+                    catchError(){
+                        checkout scmGit(
+                            branches: [[name: ':origin/tags/(.*staging.*|.*production.*)']],
+                            extensions: [],
+                            userRemoteConfigs: [[credentialsId: 'github-devloc-ssh-key', 
+                                refspec: '+refs/tags/*:refs/remotes/origin/tags/*',
+                                url: 'git@github.com:aariyant/go-fruits.git'
+                            ]])
+                    }
+                }
+                notifySlack(currentBuild.result, "Checkout Code")
+                script{
+                    if (currentBuild == "FAILURE"){
+                        error "FAILURE/UNSTABLE"
+                    }
+                }
+            }
+        }
+        stage("Build Apps"){
+            steps{
+                script{
+                    withDockerServer([uri: 'tcp://100.96.1.3:2375']) {
+                        withDockerRegistry(credentialsId: 'docker-hub-satellite') {
+                            sh """
+			    echo "Building apps..."
+                            """
+                        }
+                    }
+                }
+                notifySlack(currentBuild.result, "Build Apps")
+                script{
+                    if (currentBuild == "FAILURE"){
+                        error "FAILURE/UNSTABLE"
+                    }
+                }
+            }
+        }
+        stage("Deploy Apps"){
+            steps{
+                script{
+                    withCredentials([file(credentialsId: 'devloc-kubeconfig', variable: 'KUBECONFIG')]) {
+                        sh '''
+			echo "Deploying apps..."
+                        '''
+                    }
+                }
+                notifySlack(currentBuild.result, "Deploy Apps")
+                script{
+                    if (currentBuild == "FAILURE"){
+                        error "FAILURE/UNSTABLE"
+                    }
+                }
+            }
+        }
+    }
+}
+
+def notifySlack(String buildStatus = 'STARTED', String StageName) {
+  // build status of null means successful
+  buildStatus =  buildStatus ?: 'SUCCESSFUL'
+
+  // Default values
+  def colorName = 'RED'
+  def colorCode = '#FF0000'
+  def subject = "${buildStatus}: '${StageName} on ${env.JOB_NAME} [${env.BUILD_NUMBER}]'"
+  def summary = "${subject} \n Deployer : (${env.BUILD_USER}) \n (${env.BUILD_URL})"
+
+  // Override default values based on build status
+  if (buildStatus == 'STARTED') {
+    color = 'YELLOW'
+    colorCode = '#FFFF00'
+  } else if (buildStatus == 'SUCCESSFUL') {
+    color = 'GREEN'
+    colorCode = '#00FF00'
+  } else {
+    color = 'RED'
+    colorCode = '#FF0000'
+  }
+
+  // Send notifications
+  slackSend (color: colorCode, message: summary, channel: '#random', failOnError: true)
+}
